@@ -1501,7 +1501,7 @@ git commit -m "Add test workflow: pytest on push and PR"
 git push
 ```
 
-Then visit `https://github.com/ottotheotto/laundrytime/actions` and confirm the `test` workflow ran and passed on the new commit.
+Then visit `https://github.com/ottotheotto/laundrytime1/actions` and confirm the `test` workflow ran and passed on the new commit.
 
 ---
 
@@ -1570,7 +1570,7 @@ git push
 - [ ] **Step 3: Enable GitHub Pages with "GitHub Actions" as source**
 
 In the GitHub web UI:
-1. Open `https://github.com/ottotheotto/laundrytime/settings/pages`.
+1. Open `https://github.com/ottotheotto/laundrytime1/settings/pages`.
 2. Under **Build and deployment → Source**, select **GitHub Actions**.
 3. Save.
 
@@ -1579,10 +1579,10 @@ In the GitHub web UI:
 - [ ] **Step 4: Trigger the workflow manually to verify**
 
 In the GitHub UI:
-1. Open `https://github.com/ottotheotto/laundrytime/actions/workflows/publish.yml`.
+1. Open `https://github.com/ottotheotto/laundrytime1/actions/workflows/publish.yml`.
 2. Click **Run workflow** → **Run workflow**.
 3. Wait for both `build` and `deploy` jobs to go green.
-4. Visit the published URL (shown on the deploy job's summary, usually `https://ottotheotto.github.io/laundrytime/`).
+4. Visit the published URL (shown on the deploy job's summary, usually `https://ottotheotto.github.io/laundrytime1/`).
 5. Open it in a regular browser first; verify the chart renders and shows realistic SE4 prices.
 6. Then open it on the Kindle. Confirm legibility.
 
@@ -1597,16 +1597,16 @@ In the GitHub UI:
 
 - [ ] **Step 1: Write `README.md`**
 
-Replace the published-URL placeholder once you confirm it (default GitHub Pages URL for this repo is `https://ottotheotto.github.io/laundrytime/`).
+Replace the published-URL placeholder once you confirm it (default GitHub Pages URL for this repo is `https://ottotheotto.github.io/laundrytime1/`).
 
 ```markdown
-# laundrytime
+# laundrytime1
 
 A static webpage rendering Nord Pool SE4 spot prices for a Kindle e-ink browser.
 Answers "is electricity cheap right now?" at a glance — designed to help time
 laundry / dishwasher / EV charging.
 
-**Live:** https://ottotheotto.github.io/laundrytime/
+**Live:** https://ottotheotto.github.io/laundrytime1/
 
 **Design spec:** [`docs/superpowers/specs/2026-05-06-electro-price-design.md`](docs/superpowers/specs/2026-05-06-electro-price-design.md)
 
