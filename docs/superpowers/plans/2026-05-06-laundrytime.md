@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.12 (stdlib: `urllib.request`, `json`, `datetime`, `zoneinfo`, `argparse`, `pathlib`), pytest 8 (dev only), GitHub Actions, GitHub Pages.
 
-**Reference spec:** `docs/superpowers/specs/2026-05-06-electro-price-design.md`.
+**Reference spec:** `docs/superpowers/specs/2026-05-06-laundrytime-design.md`.
 
 ---
 
@@ -55,7 +55,7 @@ All test code lives in `tests/test_build.py`. JSON fixtures are inline Python li
 
 ```toml
 [project]
-name = "electro-price"
+name = "laundrytime"
 version = "0.0.1"
 requires-python = ">=3.12"
 
@@ -1608,7 +1608,7 @@ laundry / dishwasher / EV charging.
 
 **Live:** https://ottotheotto.github.io/laundrytime/
 
-**Design spec:** [`docs/superpowers/specs/2026-05-06-electro-price-design.md`](docs/superpowers/specs/2026-05-06-electro-price-design.md)
+**Design spec:** [`docs/superpowers/specs/2026-05-06-laundrytime-design.md`](docs/superpowers/specs/2026-05-06-laundrytime-design.md)
 
 ## How it works
 
@@ -1704,7 +1704,7 @@ git push
 
 ## Execution Handoff
 
-Plan complete and saved to `docs/superpowers/plans/2026-05-06-electro-price.md`. Two execution options:
+Plan complete and saved to `docs/superpowers/plans/2026-05-06-laundrytime.md`. Two execution options:
 
 **1. Subagent-Driven (recommended)** — I dispatch a fresh subagent per task, review between tasks, fast iteration.
 

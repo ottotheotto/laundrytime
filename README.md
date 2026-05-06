@@ -6,7 +6,7 @@ laundry / dishwasher / EV charging.
 
 **Live:** https://ottotheotto.github.io/laundrytime/
 
-**Design spec:** [`docs/superpowers/specs/2026-05-06-electro-price-design.md`](docs/superpowers/specs/2026-05-06-electro-price-design.md)
+**Design spec:** [`docs/superpowers/specs/2026-05-06-laundrytime-design.md`](docs/superpowers/specs/2026-05-06-laundrytime-design.md)
 
 ## How it works
 

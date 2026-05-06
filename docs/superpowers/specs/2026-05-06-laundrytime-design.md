@@ -147,7 +147,7 @@ Network requests use a 10-second timeout. One retry with a 5-second delay on tra
 ## Repository Structure
 
 ```
-electro-price/
+laundrytime/
 ├── README.md
 ├── build.py                        # generator: fetch, transform, render
 ├── tests/
@@ -159,7 +159,7 @@ electro-price/
 ├── docs/
 │   └── superpowers/
 │       └── specs/
-│           └── 2026-05-06-electro-price-design.md
+│           └── 2026-05-06-laundrytime-design.md
 └── .gitignore                      # ignores .superpowers/, __pycache__, etc.
 ```
 
