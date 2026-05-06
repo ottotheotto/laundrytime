@@ -385,3 +385,96 @@ def test_fetch_dataset_uses_stockholm_local_date_for_url():
     build.fetch_dataset(now, fetch=fake_fetch)
     # today must be 2026-05-07 (Stockholm local), not 2026-05-06 (UTC)
     assert _date(2026, 5, 7) in requested
+
+
+def _typical_dataset(now: datetime) -> list[build.Slot]:
+    """Build a 24h dataset of varying prices around `now` for render tests."""
+    base = (now - timedelta(hours=6)).replace(minute=0, second=0, microsecond=0)
+    # 96 slots covering 24h; sinusoidal-ish prices so min/max differ
+    import math
+    prices = [0.50 + 0.50 * math.sin(i / 96 * 2 * math.pi) for i in range(96)]
+    return _slots_at_15min(base, 96, prices)
+
+
+def test_render_emits_valid_html5_document():
+    now = datetime(2026, 5, 6, 14, 2, tzinfo=TZ_PLUS_2)
+    slots = _typical_dataset(now)
+    html = build.render(slots, now)
+    assert html.startswith("<!DOCTYPE html>")
+    assert "</html>" in html
+    assert '<html lang="sv"' in html
+
+
+def test_render_includes_hourly_auto_refresh_meta():
+    now = datetime(2026, 5, 6, 14, 2, tzinfo=TZ_PLUS_2)
+    html = build.render(_typical_dataset(now), now)
+    assert '<meta http-equiv="refresh" content="3600">' in html
+
+
+def test_render_shows_uppdaterad_with_now_local_time():
+    now = datetime(2026, 5, 6, 14, 2, tzinfo=TZ_PLUS_2)
+    html = build.render(_typical_dataset(now), now)
+    assert "Uppdaterad" in html
+    assert "14:02" in html
+
+
+def test_render_shows_just_nu_label_and_current_price():
+    now = datetime(2026, 5, 6, 14, 2, tzinfo=TZ_PLUS_2)
+    slots = _typical_dataset(now)
+    html = build.render(slots, now)
+    assert "JUST NU" in html
+    current = build.now_slot(slots, now)
+    assert current is not None
+    expected_ore = round(current.sek_per_kwh * 100)
+    # The price appears as a standalone token (the big number); use a
+    # surrounding-context check instead of `str(expected_ore) in html`,
+    # which could match adjacent values.
+    import re
+    assert re.search(rf">\s*{expected_ore}\s*<", html), html
+
+
+def test_render_shows_either_vanta_or_billigast_just_nu_in_footer():
+    now = datetime(2026, 5, 6, 14, 2, tzinfo=TZ_PLUS_2)
+    html = build.render(_typical_dataset(now), now)
+    assert ("Vänta till kl" in html) or ("Billigast just nu" in html)
+
+
+def test_render_shows_24h_average_in_footer():
+    now = datetime(2026, 5, 6, 14, 2, tzinfo=TZ_PLUS_2)
+    html = build.render(_typical_dataset(now), now)
+    assert "Snitt 24h" in html
+
+
+def test_render_swedish_weekday_and_month_names():
+    # 2026-05-06 is a Wednesday in Swedish: "Onsdag 6 maj"
+    now = datetime(2026, 5, 6, 14, 2, tzinfo=TZ_PLUS_2)
+    html = build.render(_typical_dataset(now), now)
+    assert "Onsdag" in html
+    assert "6 maj" in html
+
+
+def test_render_contains_inline_svg_chart_with_nu_marker():
+    now = datetime(2026, 5, 6, 14, 2, tzinfo=TZ_PLUS_2)
+    html = build.render(_typical_dataset(now), now)
+    assert "<svg" in html
+    # NU marker label is rendered as text node next to the dot:
+    assert "NU · " in html
+
+
+def test_render_no_external_assets_or_scripts():
+    now = datetime(2026, 5, 6, 14, 2, tzinfo=TZ_PLUS_2)
+    html = build.render(_typical_dataset(now), now)
+    # Self-contained: no <link rel="stylesheet">, no <script src=...>, no <img>
+    assert "<link " not in html
+    assert "<script" not in html
+    assert "<img" not in html
+
+
+def test_render_handles_negative_prices_in_window():
+    now = datetime(2026, 5, 6, 14, 0, tzinfo=TZ_PLUS_2)
+    base = now - timedelta(hours=6)
+    prices = [-0.10] * 24 + [0.20] * 72  # negative early, positive later
+    slots = _slots_at_15min(base, 96, prices)
+    html = build.render(slots, now)
+    # Just verify it renders without raising and includes a "now" price.
+    assert "JUST NU" in html

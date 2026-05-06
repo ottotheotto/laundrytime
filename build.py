@@ -7,6 +7,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 
 @dataclass(frozen=True)
@@ -122,6 +123,118 @@ def fetch_day(
     raise last_err
 
 
+_STOCKHOLM = ZoneInfo("Europe/Stockholm")
+
+# Swedish day-of-week names (Monday=0)
+_SV_WEEKDAYS = [
+    "Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag", "Söndag",
+]
+# Swedish month names (1-indexed)
+_SV_MONTHS = [
+    "", "januari", "februari", "mars", "april", "maj", "juni",
+    "juli", "augusti", "september", "oktober", "november", "december",
+]
+
+
+def _ore(sek_per_kwh: float) -> int:
+    """Convert SEK/kWh to integer öre/kWh (rounded)."""
+    return round(sek_per_kwh * 100)
+
+
+def _format_swedish_date(dt: datetime) -> str:
+    """e.g. 'Onsdag 6 maj' (no year, no leading zero)."""
+    return f"{_SV_WEEKDAYS[dt.weekday()]} {dt.day} {_SV_MONTHS[dt.month]}"
+
+
+def _build_chart_svg(
+    window: list[Slot],
+    now: datetime,
+    now_x_pct: float = 25.0,
+) -> str:
+    """Render the inline SVG chart. Pure function — no side effects."""
+    if not window:
+        return '<svg viewBox="0 0 720 260" preserveAspectRatio="none"></svg>'
+
+    win_start = window[0].time_start
+    win_end = window[-1].time_end
+    total_seconds = (win_end - win_start).total_seconds()
+
+    def x_for(t: datetime) -> float:
+        return ((t - win_start).total_seconds() / total_seconds) * 720.0
+
+    prices = [s.sek_per_kwh for s in window]
+    y_max = max(prices)
+    y_min = min(0.0, min(prices))  # baseline includes negatives if present
+    y_range = y_max - y_min if y_max > y_min else 1.0
+
+    def y_for(price: float) -> float:
+        # SVG y=20 is top, y=180 is baseline (zero)
+        return 180.0 - ((price - y_min) / y_range) * 160.0
+
+    # Build the filled area path: step shape across slots, closed at baseline.
+    parts: list[str] = [f"M {x_for(window[0].time_start):.2f},{y_for(y_min):.2f}"]
+    for s in window:
+        x0 = x_for(s.time_start)
+        x1 = x_for(s.time_end)
+        y = y_for(s.sek_per_kwh)
+        parts.append(f"L {x0:.2f},{y:.2f} L {x1:.2f},{y:.2f}")
+    baseline_y = y_for(y_min)
+    parts.append(f"L {x_for(window[-1].time_end):.2f},{baseline_y:.2f}")
+    parts.append(f"L {x_for(window[0].time_start):.2f},{baseline_y:.2f} Z")
+    path_d = " ".join(parts)
+
+    current = now_slot(window, now) or window[0]
+    nu_x = x_for(now)
+    nu_y = y_for(current.sek_per_kwh)
+    nu_ore = _ore(current.sek_per_kwh)
+
+    cheapest = cheapest_upcoming(window, now)
+    cheapest_marker = ""
+    if cheapest is not None:
+        cx = x_for(cheapest.time_start + (cheapest.time_end - cheapest.time_start) / 2)
+        cy = y_for(cheapest.sek_per_kwh)
+        kl = cheapest.time_start.astimezone(_STOCKHOLM).strftime("%H")
+        cheapest_marker = (
+            f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="4" fill="#000"/>'
+            f'<text x="{cx:.2f}" y="{cy - 8:.2f}" font-size="11" font-weight="700" '
+            f'text-anchor="middle">↑ billigast {_ore(cheapest.sek_per_kwh)} öre (kl {kl})</text>'
+        )
+
+    # X-axis ticks every 6h, anchored to NU
+    tick_lines: list[str] = []
+    for offset_h in (-6, 0, 6, 12, 18):
+        t = now + timedelta(hours=offset_h)
+        if not (win_start <= t <= win_end):
+            continue
+        tx = x_for(t)
+        local = t.astimezone(_STOCKHOLM)
+        label = local.strftime("%H")
+        if offset_h == 0:
+            tick_lines.append(
+                f'<text x="{tx:.2f}" y="200" font-size="11" font-weight="700" '
+                f'text-anchor="middle">{label} (NU)</text>'
+            )
+        else:
+            tick_lines.append(
+                f'<text x="{tx:.2f}" y="200" font-size="11" '
+                f'text-anchor="middle">{label}</text>'
+            )
+
+    return f"""<svg viewBox="0 0 720 260" preserveAspectRatio="none" aria-hidden="true">
+  <path d="{path_d}" fill="#cfcfcf" stroke="#000" stroke-width="1.5" stroke-linejoin="miter"/>
+  <line x1="{nu_x:.2f}" y1="20" x2="{nu_x:.2f}" y2="180" stroke="#000" stroke-width="1" stroke-dasharray="2 3"/>
+  <circle cx="{nu_x:.2f}" cy="{nu_y:.2f}" r="7" fill="#000"/>
+  <text x="{nu_x + 10:.2f}" y="{nu_y - 4:.2f}" font-size="15" font-weight="700">NU · {nu_ore}</text>
+  {cheapest_marker}
+  <line x1="0" y1="180" x2="720" y2="180" stroke="#000" stroke-width="1.5"/>
+  <text x="2" y="28" font-size="10">{_ore(y_max)}</text>
+  <text x="2" y="180" font-size="10">{_ore(y_min)}</text>
+  {''.join(tick_lines)}
+  <text x="{(nu_x / 2):.2f}" y="220" font-size="10" letter-spacing="1.5" text-anchor="middle">SENASTE 6 H</text>
+  <text x="{(nu_x + (720 - nu_x) / 2):.2f}" y="220" font-size="10" letter-spacing="1.5" text-anchor="middle">KOMMANDE 18 H</text>
+</svg>"""
+
+
 def fetch_dataset(now: datetime, *, fetch=None) -> list[Slot]:
     """Fetch yesterday, today, and tomorrow's slots and return them as a flat list.
 
@@ -154,3 +267,72 @@ def fetch_dataset(now: datetime, *, fetch=None) -> list[Slot]:
             continue
         slots.extend(parse_slots(payload))
     return slots
+
+
+def render(slots: list[Slot], now: datetime) -> str:
+    """Render the complete HTML page as a string.
+
+    `slots` is the full multi-day dataset; this function slices the display
+    window itself. `now` should be timezone-aware; for display, it's converted
+    to Europe/Stockholm.
+    """
+    now_local = now.astimezone(_STOCKHOLM)
+    window = slice_window(slots, now)
+
+    current = now_slot(window, now)
+    nu_ore = _ore(current.sek_per_kwh) if current else 0
+
+    cheapest = cheapest_upcoming(window, now)
+    avg = _ore(window_average(window))
+
+    if cheapest is None:
+        footer_left = "Inga kommande priser"
+    elif current is not None and cheapest.sek_per_kwh >= current.sek_per_kwh:
+        footer_left = "Billigast just nu"
+    else:
+        kl = cheapest.time_start.astimezone(_STOCKHOLM).strftime("%H")
+        footer_left = (
+            f"<b>Vänta till kl {kl}</b> för billigaste pris "
+            f"({_ore(cheapest.sek_per_kwh)} öre/kWh)"
+        )
+
+    chart_svg = _build_chart_svg(window, now)
+
+    return f"""<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="3600">
+<title>El SE4</title>
+<style>
+  html, body {{ margin: 0; padding: 0; background: #fff; color: #000;
+                font-family: Georgia, "Times New Roman", serif; }}
+  .page {{ max-width: 760px; margin: 0 auto; padding: 22px 22px 16px; }}
+  .top {{ display: flex; justify-content: space-between; align-items: flex-end;
+          border-bottom: 1px solid #000; padding-bottom: 10px; margin-bottom: 16px; }}
+  .now-big {{ font-size: 52px; font-weight: 800; line-height: 1; }}
+  .now-big small {{ font-size: 16px; font-weight: 600; letter-spacing: 1.5px;
+                    display: block; margin-bottom: 4px; }}
+  .now-big .unit {{ font-size: 20px; font-weight: 600; }}
+  .meta {{ text-align: right; font-size: 14px; line-height: 1.5; }}
+  .meta b {{ font-size: 18px; }}
+  svg {{ display: block; width: 100%; height: auto; }}
+  .foot {{ display: flex; justify-content: space-between; font-size: 13px;
+           margin-top: 12px; padding-top: 8px; border-top: 1px solid #000; }}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="top">
+    <div class="now-big"><small>JUST NU</small>{nu_ore} <span class="unit">öre/kWh</span></div>
+    <div class="meta">Uppdaterad <b>{now_local.strftime('%H:%M')}</b><br>{_format_swedish_date(now_local)}</div>
+  </div>
+  {chart_svg}
+  <div class="foot">
+    <span>{footer_left}</span>
+    <span>Snitt 24h: {avg} öre</span>
+  </div>
+</div>
+</body>
+</html>"""
