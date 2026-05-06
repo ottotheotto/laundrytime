@@ -159,6 +159,9 @@ def _build_chart_svg(
     win_end = window[-1].time_end
     total_seconds = (win_end - win_start).total_seconds()
 
+    if total_seconds == 0.0:
+        return '<svg viewBox="0 0 720 260" preserveAspectRatio="none"></svg>'
+
     def x_for(t: datetime) -> float:
         return ((t - win_start).total_seconds() / total_seconds) * 720.0
 
@@ -204,7 +207,7 @@ def _build_chart_svg(
     tick_lines: list[str] = []
     for offset_h in (-6, 0, 6, 12, 18):
         t = now + timedelta(hours=offset_h)
-        if not (win_start <= t <= win_end):
+        if not (win_start <= t < win_end):
             continue
         tx = x_for(t)
         local = t.astimezone(_STOCKHOLM)
@@ -278,6 +281,9 @@ def render(slots: list[Slot], now: datetime) -> str:
     """
     now_local = now.astimezone(_STOCKHOLM)
     window = slice_window(slots, now)
+
+    if not window:
+        raise ValueError("No price slots in display window — cannot render")
 
     current = now_slot(window, now)
     nu_ore = _ore(current.sek_per_kwh) if current else 0

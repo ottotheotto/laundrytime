@@ -1,4 +1,6 @@
 from datetime import datetime, timezone, timedelta
+import math
+import re
 
 import pytest
 
@@ -391,7 +393,6 @@ def _typical_dataset(now: datetime) -> list[build.Slot]:
     """Build a 24h dataset of varying prices around `now` for render tests."""
     base = (now - timedelta(hours=6)).replace(minute=0, second=0, microsecond=0)
     # 96 slots covering 24h; sinusoidal-ish prices so min/max differ
-    import math
     prices = [0.50 + 0.50 * math.sin(i / 96 * 2 * math.pi) for i in range(96)]
     return _slots_at_15min(base, 96, prices)
 
@@ -429,7 +430,6 @@ def test_render_shows_just_nu_label_and_current_price():
     # The price appears as a standalone token (the big number); use a
     # surrounding-context check instead of `str(expected_ore) in html`,
     # which could match adjacent values.
-    import re
     assert re.search(rf">\s*{expected_ore}\s*<", html), html
 
 
@@ -470,11 +470,22 @@ def test_render_no_external_assets_or_scripts():
     assert "<img" not in html
 
 
+def test_render_raises_on_empty_window():
+    now = datetime(2026, 5, 6, 14, 0, tzinfo=TZ_PLUS_2)
+    # All slots are far in the future, outside the [now-6h, now+18h) window.
+    far_future = now + timedelta(days=10)
+    slots = _slots_at_15min(far_future, 4, [0.50] * 4)
+    with pytest.raises(ValueError, match="No price slots"):
+        build.render(slots, now)
+
+
 def test_render_handles_negative_prices_in_window():
     now = datetime(2026, 5, 6, 14, 0, tzinfo=TZ_PLUS_2)
     base = now - timedelta(hours=6)
     prices = [-0.10] * 24 + [0.20] * 72  # negative early, positive later
     slots = _slots_at_15min(base, 96, prices)
     html = build.render(slots, now)
-    # Just verify it renders without raising and includes a "now" price.
     assert "JUST NU" in html
+    # The bottom y-axis label should reflect the negative minimum.
+    # _ore(-0.10) == -10, which should appear as the bottom axis tick.
+    assert ">-10<" in html
