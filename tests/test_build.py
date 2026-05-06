@@ -243,8 +243,9 @@ def test_fetch_day_returns_parsed_payload_on_200():
                 "time_end":   "2026-05-06T00:15:00+02:00"}]
 
     captured = {}
-    def opener(url, timeout=None):
-        captured["url"] = url
+    def opener(req, timeout=None):
+        captured["url"] = req.full_url
+        captured["user_agent"] = req.get_header("User-agent")
         captured["timeout"] = timeout
         return _FakeResponse(payload)
 
@@ -254,11 +255,12 @@ def test_fetch_day_returns_parsed_payload_on_200():
         "https://www.elprisetjustnu.se/api/v1/prices/2026/05-06_SE4.json"
     )
     assert captured["timeout"] == 10
+    assert captured["user_agent"] and "laundrytime" in captured["user_agent"]
 
 
 def test_fetch_day_returns_none_on_404():
-    def opener(url, timeout=None):
-        raise HTTPError(url, 404, "Not Found", hdrs=None, fp=None)
+    def opener(req, timeout=None):
+        raise HTTPError(req.full_url, 404, "Not Found", hdrs=None, fp=None)
     assert build.fetch_day(_date(2026, 5, 6), urlopen=opener, sleep=lambda _: None) is None
 
 
@@ -268,10 +270,10 @@ def test_fetch_day_retries_once_on_500_then_succeeds():
                 "time_end":   "2026-05-06T00:15:00+02:00"}]
     calls = {"n": 0}
 
-    def opener(url, timeout=None):
+    def opener(req, timeout=None):
         calls["n"] += 1
         if calls["n"] == 1:
-            raise HTTPError(url, 503, "Service Unavailable", hdrs=None, fp=None)
+            raise HTTPError(req.full_url, 503, "Service Unavailable", hdrs=None, fp=None)
         return _FakeResponse(payload)
 
     sleeps = []
@@ -282,7 +284,7 @@ def test_fetch_day_retries_once_on_500_then_succeeds():
 
 
 def test_fetch_day_raises_after_retry_still_failing():
-    def opener(url, timeout=None):
+    def opener(req, timeout=None):
         raise URLError("connection refused")
 
     with pytest.raises(URLError):
@@ -290,8 +292,8 @@ def test_fetch_day_raises_after_retry_still_failing():
 
 
 def test_fetch_day_raises_immediately_on_4xx_other_than_404():
-    def opener(url, timeout=None):
-        raise HTTPError(url, 400, "Bad Request", hdrs=None, fp=None)
+    def opener(req, timeout=None):
+        raise HTTPError(req.full_url, 400, "Bad Request", hdrs=None, fp=None)
 
     with pytest.raises(HTTPError):
         build.fetch_day(_date(2026, 5, 6), urlopen=opener, sleep=lambda _: None)

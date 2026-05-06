@@ -86,6 +86,7 @@ def window_average(slots: list[Slot]) -> float:
 
 
 _API_TEMPLATE = "https://www.elprisetjustnu.se/api/v1/prices/{year}/{mm:02d}-{dd:02d}_SE4.json"
+_USER_AGENT = "laundrytime/0.1 (+https://github.com/ottotheotto/laundrytime)"
 
 
 def fetch_day(
@@ -103,11 +104,12 @@ def fetch_day(
     if urlopen is None:
         urlopen = urllib.request.urlopen
     url = _API_TEMPLATE.format(year=day.year, mm=day.month, dd=day.day)
+    request = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
 
     last_err: Exception | None = None
     for attempt in range(2):
         try:
-            with urlopen(url, timeout=10) as resp:
+            with urlopen(request, timeout=10) as resp:
                 return json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
             if e.code == 404:
