@@ -1,10 +1,10 @@
-# laundrytime1
+# laundrytime
 
 A static webpage rendering Nord Pool SE4 spot prices for a Kindle e-ink browser.
 Answers "is electricity cheap right now?" at a glance — designed to help time
 laundry / dishwasher / EV charging.
 
-**Live:** https://ottotheotto.github.io/laundrytime1/
+**Live:** https://ottotheotto.github.io/laundrytime/
 
 **Design spec:** [`docs/superpowers/specs/2026-05-06-electro-price-design.md`](docs/superpowers/specs/2026-05-06-electro-price-design.md)
 
