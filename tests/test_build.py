@@ -214,6 +214,7 @@ def test_window_average_with_negative_prices():
 
 import io
 import json as _json
+from pathlib import Path
 from urllib.error import HTTPError, URLError
 from datetime import date as _date
 
@@ -489,3 +490,51 @@ def test_render_handles_negative_prices_in_window():
     # The bottom y-axis label should reflect the negative minimum.
     # _ore(-0.10) == -10, which should appear as the bottom axis tick.
     assert ">-10<" in html
+
+
+def test_main_writes_html_to_output(tmp_path, monkeypatch):
+    today_payload = _payload_at("2026-05-06T00:00:00+02:00", 96)
+    yesterday_payload = _payload_at("2026-05-05T00:00:00+02:00", 96)
+    tomorrow_payload = _payload_at("2026-05-07T00:00:00+02:00", 96)
+
+    def fake_fetch(d):
+        if d == _date(2026, 5, 5): return yesterday_payload
+        if d == _date(2026, 5, 6): return today_payload
+        if d == _date(2026, 5, 7): return tomorrow_payload
+        return None
+
+    monkeypatch.setattr(build, "fetch_day", fake_fetch)
+
+    out = tmp_path / "index.html"
+    rc = build.main([
+        "--output", str(out),
+        "--now", "2026-05-06T14:02:00+02:00",
+    ])
+    assert rc == 0
+    assert out.exists()
+    text = out.read_text(encoding="utf-8")
+    assert text.startswith("<!DOCTYPE html>")
+    assert "Uppdaterad" in text
+    assert "14:02" in text
+
+
+def test_main_creates_parent_directories(tmp_path, monkeypatch):
+    today_payload = _payload_at("2026-05-06T00:00:00+02:00", 96)
+    monkeypatch.setattr(build, "fetch_day",
+                        lambda d: today_payload if d == _date(2026, 5, 6) else None)
+    out = tmp_path / "_site" / "index.html"
+    rc = build.main([
+        "--output", str(out),
+        "--now", "2026-05-06T14:02:00+02:00",
+    ])
+    assert rc == 0
+    assert out.exists()
+
+
+def test_main_propagates_required_today_failure(tmp_path, monkeypatch):
+    monkeypatch.setattr(build, "fetch_day", lambda d: None)  # 404 for everything
+    with pytest.raises(RuntimeError):
+        build.main([
+            "--output", str(tmp_path / "index.html"),
+            "--now", "2026-05-06T14:02:00+02:00",
+        ])

@@ -1,12 +1,15 @@
 """Electro-price: render Nord Pool SE4 spot prices for a Kindle browser."""
 from __future__ import annotations
 
+import argparse
 import json
+import sys
 import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 
@@ -342,3 +345,35 @@ def render(slots: list[Slot], now: datetime) -> str:
 </div>
 </body>
 </html>"""
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Render the SE4 spot-price page to a static HTML file.",
+    )
+    parser.add_argument("--output", default="index.html",
+                        help="Destination HTML path (default: index.html)")
+    parser.add_argument("--now", default=None,
+                        help="ISO-8601 timestamp to render for "
+                             "(default: current time in Europe/Stockholm)")
+    args = parser.parse_args(argv)
+
+    if args.now is None:
+        now = datetime.now(_STOCKHOLM)
+    else:
+        parsed = datetime.fromisoformat(args.now)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=_STOCKHOLM)
+        now = parsed.astimezone(_STOCKHOLM)
+
+    slots = fetch_dataset(now)
+    html = render(slots, now)
+
+    out = Path(args.output)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(html, encoding="utf-8")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
