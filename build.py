@@ -322,7 +322,7 @@ def render(slots: list[Slot], now: datetime) -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="refresh" content="3600">
-<title>El SE4</title>
+<title>Laundry Time</title>
 <style>
   html, body {{ margin: 0; padding: 0; background: #fff; color: #000;
                 font-family: Georgia, "Times New Roman", serif; }}
