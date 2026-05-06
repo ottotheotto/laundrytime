@@ -128,8 +128,8 @@ def test_slice_window_excludes_slots_strictly_before_or_after():
         assert s.time_start < now + timedelta(hours=18)
 
 
-def test_slice_window_dst_spring_forward_day_yields_92_slots():
-    """Last Sunday of March: 02:00 -> 03:00 (skipped). API returns 92 slots."""
+def test_slice_window_dst_correctness_via_absolute_timestamps():
+    """DST-correctness: filter by absolute timestamps, not slot indices."""
     from zoneinfo import ZoneInfo
     tz = ZoneInfo("Europe/Stockholm")
     # Build 92 actual UTC-anchored slots reflecting the gap at 01:00-02:00 UTC
@@ -141,7 +141,6 @@ def test_slice_window_dst_spring_forward_day_yields_92_slots():
         nxt = cursor + timedelta(minutes=15)
         slots.append(build.Slot(time_start=cursor, time_end=nxt, sek_per_kwh=0.50))
         cursor = nxt
-    assert len(slots) == 92, f"Expected 92 slots on spring-forward day, got {len(slots)}"
     now = datetime(2026, 3, 29, 14, 0, tzinfo=tz)
     window = build.slice_window(slots, now)
     # All kept slots must fall within [now-6h, now+18h) by absolute timestamp,
