@@ -1,5 +1,7 @@
 from datetime import datetime, timezone, timedelta
 
+import pytest
+
 import build
 
 
@@ -190,3 +192,19 @@ def test_cheapest_upcoming_returns_none_when_no_future_slots():
     slots = _slots_at_15min(base, 2, [0.50, 0.30])
     now = base + timedelta(hours=10)
     assert build.cheapest_upcoming(slots, now) is None
+
+
+def test_window_average_simple():
+    base = datetime(2026, 5, 6, 14, 0, tzinfo=TZ_PLUS_2)
+    slots = _slots_at_15min(base, 4, [0.20, 0.40, 0.60, 0.80])
+    assert build.window_average(slots) == 0.50
+
+
+def test_window_average_empty_list_returns_zero():
+    assert build.window_average([]) == 0.0
+
+
+def test_window_average_with_negative_prices():
+    base = datetime(2026, 5, 6, 14, 0, tzinfo=TZ_PLUS_2)
+    slots = _slots_at_15min(base, 3, [-0.10, 0.20, 0.50])
+    assert build.window_average(slots) == pytest.approx(0.20)

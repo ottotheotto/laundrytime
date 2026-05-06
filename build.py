@@ -68,3 +68,10 @@ def cheapest_upcoming(slots: list[Slot], now: datetime) -> Slot | None:
     if not upcoming:
         return None
     return min(upcoming, key=lambda s: (s.sek_per_kwh, s.time_start))
+
+
+def window_average(slots: list[Slot]) -> float:
+    """Arithmetic mean of ``sek_per_kwh`` across the given slots. Empty -> 0.0."""
+    if not slots:
+        return 0.0
+    return sum(s.sek_per_kwh for s in slots) / len(slots)
