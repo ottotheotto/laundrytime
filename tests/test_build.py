@@ -460,8 +460,9 @@ def test_render_contains_inline_svg_chart_with_nu_marker():
     now = datetime(2026, 5, 6, 14, 2, tzinfo=TZ_PLUS_2)
     html = build.render(_typical_dataset(now), now)
     assert "<svg" in html
-    # NU marker label is rendered as text node next to the dot:
-    assert "NU · " in html
+    # NU marker is the dashed vertical line + the larger filled dot (r=7).
+    assert 'stroke-dasharray="2 3"' in html
+    assert 'r="7"' in html
 
 
 def test_render_no_external_assets_or_scripts():

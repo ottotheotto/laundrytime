@@ -194,20 +194,13 @@ def _build_chart_svg(
     current = now_slot(window, now) or window[0]
     nu_x = x_for(now)
     nu_y = y_for(current.sek_per_kwh)
-    nu_ore = _ore(current.sek_per_kwh)
 
     cheapest = cheapest_upcoming(window, now)
     cheapest_dot = ""
-    cheapest_label = ""
     if cheapest is not None:
         cx = x_for(cheapest.time_start + (cheapest.time_end - cheapest.time_start) / 2)
         cy = y_for(cheapest.sek_per_kwh)
-        kl = cheapest.time_start.astimezone(_STOCKHOLM).strftime("%H")
         cheapest_dot = f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="4" fill="#000"/>'
-        cheapest_label = (
-            f'<text x="{cx:.2f}" y="265" font-size="12" font-weight="700" '
-            f'text-anchor="middle">↑ billigast {_ore(cheapest.sek_per_kwh)} öre (kl {kl})</text>'
-        )
 
     # X-axis ticks every 6h, anchored to NU
     tick_lines: list[str] = []
@@ -229,7 +222,7 @@ def _build_chart_svg(
                 f'text-anchor="middle">{label}</text>'
             )
 
-    return f"""<svg viewBox="0 0 720 285" preserveAspectRatio="none" aria-hidden="true">
+    return f"""<svg viewBox="0 0 720 235" preserveAspectRatio="none" aria-hidden="true">
   <path d="{path_d}" fill="#cfcfcf" stroke="#000" stroke-width="1.5" stroke-linejoin="miter"/>
   <line x1="{nu_x:.2f}" y1="20" x2="{nu_x:.2f}" y2="180" stroke="#000" stroke-width="1" stroke-dasharray="2 3"/>
   <circle cx="{nu_x:.2f}" cy="{nu_y:.2f}" r="7" fill="#000"/>
@@ -240,8 +233,6 @@ def _build_chart_svg(
   {''.join(tick_lines)}
   <text x="{(nu_x / 2):.2f}" y="220" font-size="10" letter-spacing="1.5" text-anchor="middle">SENASTE 6 H</text>
   <text x="{(nu_x + (720 - nu_x) / 2):.2f}" y="220" font-size="10" letter-spacing="1.5" text-anchor="middle">KOMMANDE 18 H</text>
-  <text x="{nu_x:.2f}" y="245" font-size="14" font-weight="700" text-anchor="middle">NU · {nu_ore}</text>
-  {cheapest_label}
 </svg>"""
 
 
@@ -298,9 +289,15 @@ def render(slots: list[Slot], now: datetime) -> str:
     cheapest = cheapest_upcoming(window, now)
     avg = _ore(window_average(window))
 
+    cheaper_ahead = (
+        cheapest is not None
+        and current is not None
+        and cheapest.sek_per_kwh < current.sek_per_kwh
+    )
+
     if cheapest is None:
         footer_left = "Inga kommande priser"
-    elif current is not None and cheapest.sek_per_kwh >= current.sek_per_kwh:
+    elif not cheaper_ahead:
         footer_left = "Billigast just nu"
     else:
         kl = cheapest.time_start.astimezone(_STOCKHOLM).strftime("%H")
@@ -308,6 +305,14 @@ def render(slots: list[Slot], now: datetime) -> str:
             f"<b>Vänta till kl {kl}</b> för billigaste pris "
             f"({_ore(cheapest.sek_per_kwh)} öre/kWh)"
         )
+
+    if cheaper_ahead:
+        kl = cheapest.time_start.astimezone(_STOCKHOLM).strftime("%H")
+        now_sub_html = (
+            f'<div class="now-sub">↑ billigast {_ore(cheapest.sek_per_kwh)} öre kl {kl}</div>'
+        )
+    else:
+        now_sub_html = ""
 
     chart_svg = _build_chart_svg(window, now)
 
@@ -328,6 +333,8 @@ def render(slots: list[Slot], now: datetime) -> str:
   .now-big small {{ font-size: 16px; font-weight: 600; letter-spacing: 1.5px;
                     display: block; margin-bottom: 4px; }}
   .now-big .unit {{ font-size: 20px; font-weight: 600; }}
+  .now-sub {{ font-size: 13px; font-weight: 600; margin-top: 8px;
+              letter-spacing: 0.3px; }}
   .meta {{ text-align: right; font-size: 14px; line-height: 1.5; }}
   .meta b {{ font-size: 18px; }}
   svg {{ display: block; width: 100%; height: auto; }}
@@ -338,7 +345,7 @@ def render(slots: list[Slot], now: datetime) -> str:
 <body>
 <div class="page">
   <div class="top">
-    <div class="now-big"><small>JUST NU</small>{nu_ore} <span class="unit">öre/kWh</span></div>
+    <div class="now-big"><small>JUST NU</small>{nu_ore} <span class="unit">öre/kWh</span>{now_sub_html}</div>
     <div class="meta">Uppdaterad <b>{now_local.strftime('%H:%M')}</b><br>{_format_swedish_date(now_local)}</div>
   </div>
   {chart_svg}
