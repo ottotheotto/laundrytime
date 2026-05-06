@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 @dataclass(frozen=True)
@@ -40,3 +40,20 @@ def now_slot(slots: list[Slot], now: datetime) -> Slot | None:
         if slot.time_start <= now < slot.time_end:
             return slot
     return None
+
+
+def slice_window(
+    slots: list[Slot],
+    now: datetime,
+    *,
+    hours_back: int = 6,
+    hours_forward: int = 18,
+) -> list[Slot]:
+    """Return the slots whose interval overlaps [now - hours_back, now + hours_forward).
+
+    Filtering is by absolute timestamp, so DST transitions are handled correctly
+    by the underlying tz-aware datetimes — no slot-index assumptions.
+    """
+    start = now - timedelta(hours=hours_back)
+    end = now + timedelta(hours=hours_forward)
+    return [s for s in slots if s.time_start < end and s.time_end > start]
