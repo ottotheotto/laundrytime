@@ -208,3 +208,87 @@ def test_window_average_with_negative_prices():
     base = datetime(2026, 5, 6, 14, 0, tzinfo=TZ_PLUS_2)
     slots = _slots_at_15min(base, 3, [-0.10, 0.20, 0.50])
     assert build.window_average(slots) == pytest.approx(0.20)
+
+
+import io
+import json as _json
+from urllib.error import HTTPError, URLError
+from datetime import date as _date
+
+
+class _FakeResponse:
+    def __init__(self, payload):
+        self._payload = payload
+    def __enter__(self):
+        return self
+    def __exit__(self, *a):
+        return False
+    def read(self):
+        return _json.dumps(self._payload).encode("utf-8")
+
+
+def _fake_urlopen_returning(payload):
+    """Return a urlopen stand-in that always serves the given payload."""
+    def _open(url, timeout=None):
+        return _FakeResponse(payload)
+    return _open
+
+
+def test_fetch_day_returns_parsed_payload_on_200():
+    payload = [{"SEK_per_kWh": 0.5, "EUR_per_kWh": 0.044, "EXR": 11.4,
+                "time_start": "2026-05-06T00:00:00+02:00",
+                "time_end":   "2026-05-06T00:15:00+02:00"}]
+
+    captured = {}
+    def opener(url, timeout=None):
+        captured["url"] = url
+        captured["timeout"] = timeout
+        return _FakeResponse(payload)
+
+    result = build.fetch_day(_date(2026, 5, 6), urlopen=opener, sleep=lambda _: None)
+    assert result == payload
+    assert captured["url"] == (
+        "https://www.elprisetjustnu.se/api/v1/prices/2026/05-06_SE4.json"
+    )
+    assert captured["timeout"] == 10
+
+
+def test_fetch_day_returns_none_on_404():
+    def opener(url, timeout=None):
+        raise HTTPError(url, 404, "Not Found", hdrs=None, fp=None)
+    assert build.fetch_day(_date(2026, 5, 6), urlopen=opener, sleep=lambda _: None) is None
+
+
+def test_fetch_day_retries_once_on_500_then_succeeds():
+    payload = [{"SEK_per_kWh": 0.5, "EUR_per_kWh": 0.044, "EXR": 11.4,
+                "time_start": "2026-05-06T00:00:00+02:00",
+                "time_end":   "2026-05-06T00:15:00+02:00"}]
+    calls = {"n": 0}
+
+    def opener(url, timeout=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise HTTPError(url, 503, "Service Unavailable", hdrs=None, fp=None)
+        return _FakeResponse(payload)
+
+    sleeps = []
+    result = build.fetch_day(_date(2026, 5, 6), urlopen=opener, sleep=sleeps.append)
+    assert result == payload
+    assert calls["n"] == 2
+    assert sleeps == [5]
+
+
+def test_fetch_day_raises_after_retry_still_failing():
+    def opener(url, timeout=None):
+        raise URLError("connection refused")
+
+    with pytest.raises(URLError):
+        build.fetch_day(_date(2026, 5, 6), urlopen=opener, sleep=lambda _: None)
+
+
+def test_fetch_day_raises_immediately_on_4xx_other_than_404():
+    def opener(url, timeout=None):
+        raise HTTPError(url, 400, "Bad Request", hdrs=None, fp=None)
+
+    with pytest.raises(HTTPError):
+        build.fetch_day(_date(2026, 5, 6), urlopen=opener, sleep=lambda _: None)
