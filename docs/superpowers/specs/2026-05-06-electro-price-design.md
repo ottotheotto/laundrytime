@@ -64,7 +64,7 @@ GitHub Actions (cron)  ─►  build.py
 - **Returns:** array of slots, each containing `SEK_per_kWh`, `EUR_per_kWh`, `EXR`, `time_start`, `time_end`.
 - **Granularity:** 15-minute slots (96/day on standard days; 92 on spring-DST day, 100 on autumn-DST day). Script must iterate over what the API returns rather than assume a fixed slot count.
 - **Tomorrow's data:** publishes around 13:00 Europe/Stockholm. Before that, the tomorrow URL returns 404.
-- **Build performs two requests:** today, and tomorrow (404 tolerated).
+- **Build performs three requests:** yesterday, today, and tomorrow (404 tolerated on yesterday and tomorrow). Yesterday's data is needed when the display window's "last 6h" slice crosses midnight backwards (e.g. at 03:00 Stockholm, the window starts at 21:00 the previous day). Date boundaries are computed in Europe/Stockholm.
 
 ## Time Windowing
 
@@ -111,10 +111,9 @@ The visual was iterated over three rounds in the brainstorm session and locked a
 
 ## Cron Schedule
 
-GitHub Actions cron expressions are UTC. Two cron entries on the publish workflow:
+GitHub Actions cron expressions are UTC. One cron entry on the publish workflow:
 
-- `2 * * * *` — every hour at `:02 past`. The `:02` offset gives elprisetjustnu.se a couple of minutes of headroom for any sub-hour updates.
-- `15 11 * * *` — extra trigger at 11:15 UTC (= 13:15 Stockholm summer time) to catch tomorrow's prices the moment they publish. In winter this fires at 12:15 Stockholm time, which is harmless — the run just rebuilds with the same data.
+- `2 * * * *` — every hour at `:02 past UTC`. The `:02` offset gives elprisetjustnu.se a couple of minutes of headroom for any sub-hour updates. Tomorrow's prices, which publish around 13:00 Europe/Stockholm, are picked up by the next hourly run within 2 minutes regardless of DST (12:02 UTC in winter = 13:02 CET; 11:02 UTC in summer = 13:02 CEST).
 
 A `workflow_dispatch` trigger is also enabled so the workflow can be run manually.
 
