@@ -197,14 +197,15 @@ def _build_chart_svg(
     nu_ore = _ore(current.sek_per_kwh)
 
     cheapest = cheapest_upcoming(window, now)
-    cheapest_marker = ""
+    cheapest_dot = ""
+    cheapest_label = ""
     if cheapest is not None:
         cx = x_for(cheapest.time_start + (cheapest.time_end - cheapest.time_start) / 2)
         cy = y_for(cheapest.sek_per_kwh)
         kl = cheapest.time_start.astimezone(_STOCKHOLM).strftime("%H")
-        cheapest_marker = (
-            f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="4" fill="#000"/>'
-            f'<text x="{cx:.2f}" y="{cy - 8:.2f}" font-size="11" font-weight="700" '
+        cheapest_dot = f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="4" fill="#000"/>'
+        cheapest_label = (
+            f'<text x="{cx:.2f}" y="265" font-size="12" font-weight="700" '
             f'text-anchor="middle">↑ billigast {_ore(cheapest.sek_per_kwh)} öre (kl {kl})</text>'
         )
 
@@ -228,18 +229,19 @@ def _build_chart_svg(
                 f'text-anchor="middle">{label}</text>'
             )
 
-    return f"""<svg viewBox="0 0 720 260" preserveAspectRatio="none" aria-hidden="true">
+    return f"""<svg viewBox="0 0 720 285" preserveAspectRatio="none" aria-hidden="true">
   <path d="{path_d}" fill="#cfcfcf" stroke="#000" stroke-width="1.5" stroke-linejoin="miter"/>
   <line x1="{nu_x:.2f}" y1="20" x2="{nu_x:.2f}" y2="180" stroke="#000" stroke-width="1" stroke-dasharray="2 3"/>
   <circle cx="{nu_x:.2f}" cy="{nu_y:.2f}" r="7" fill="#000"/>
-  <text x="{nu_x + 10:.2f}" y="{nu_y - 4:.2f}" font-size="15" font-weight="700">NU · {nu_ore}</text>
-  {cheapest_marker}
+  {cheapest_dot}
   <line x1="0" y1="180" x2="720" y2="180" stroke="#000" stroke-width="1.5"/>
   <text x="2" y="28" font-size="10">{_ore(y_max)}</text>
   <text x="2" y="180" font-size="10">{_ore(y_min)}</text>
   {''.join(tick_lines)}
   <text x="{(nu_x / 2):.2f}" y="220" font-size="10" letter-spacing="1.5" text-anchor="middle">SENASTE 6 H</text>
   <text x="{(nu_x + (720 - nu_x) / 2):.2f}" y="220" font-size="10" letter-spacing="1.5" text-anchor="middle">KOMMANDE 18 H</text>
+  <text x="{nu_x:.2f}" y="245" font-size="14" font-weight="700" text-anchor="middle">NU · {nu_ore}</text>
+  {cheapest_label}
 </svg>"""
 
 
