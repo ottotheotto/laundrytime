@@ -57,3 +57,14 @@ def slice_window(
     start = now - timedelta(hours=hours_back)
     end = now + timedelta(hours=hours_forward)
     return [s for s in slots if s.time_start < end and s.time_end > start]
+
+
+def cheapest_upcoming(slots: list[Slot], now: datetime) -> Slot | None:
+    """Return the cheapest slot whose ``time_start > now``, or None if no such slot.
+
+    Ties on price are broken by earliest ``time_start``.
+    """
+    upcoming = [s for s in slots if s.time_start > now]
+    if not upcoming:
+        return None
+    return min(upcoming, key=lambda s: (s.sek_per_kwh, s.time_start))

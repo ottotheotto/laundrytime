@@ -159,3 +159,34 @@ def test_slice_window_custom_bounds():
     assert len(window) == 12
     assert window[0].time_start == datetime(2026, 5, 6, 11, 0, tzinfo=TZ_PLUS_2)
     assert window[-1].time_end == datetime(2026, 5, 6, 14, 0, tzinfo=TZ_PLUS_2)
+
+
+def test_cheapest_upcoming_returns_minimum_strictly_after_now():
+    base = datetime(2026, 5, 6, 14, 0, tzinfo=TZ_PLUS_2)
+    slots = _slots_at_15min(base, 4, [0.50, 0.30, 0.20, 0.40])
+    now = base + timedelta(minutes=7)  # inside slot 0
+    cheapest = build.cheapest_upcoming(slots, now)
+    assert cheapest is slots[2]  # 0.20 at 14:30
+
+
+def test_cheapest_upcoming_excludes_current_slot_even_if_cheapest():
+    base = datetime(2026, 5, 6, 14, 0, tzinfo=TZ_PLUS_2)
+    slots = _slots_at_15min(base, 3, [0.10, 0.30, 0.40])
+    now = base + timedelta(minutes=7)  # inside slot 0 (the 0.10 one)
+    cheapest = build.cheapest_upcoming(slots, now)
+    assert cheapest is slots[1]  # 0.30 — slot 0 is "now", not "upcoming"
+
+
+def test_cheapest_upcoming_tie_breaks_by_earliest_time():
+    base = datetime(2026, 5, 6, 14, 0, tzinfo=TZ_PLUS_2)
+    slots = _slots_at_15min(base, 4, [0.50, 0.20, 0.40, 0.20])
+    now = base - timedelta(minutes=5)
+    cheapest = build.cheapest_upcoming(slots, now)
+    assert cheapest is slots[1]  # earlier of the two 0.20s
+
+
+def test_cheapest_upcoming_returns_none_when_no_future_slots():
+    base = datetime(2026, 5, 6, 14, 0, tzinfo=TZ_PLUS_2)
+    slots = _slots_at_15min(base, 2, [0.50, 0.30])
+    now = base + timedelta(hours=10)
+    assert build.cheapest_upcoming(slots, now) is None
