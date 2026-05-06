@@ -28,3 +28,15 @@ def parse_slots(payload: list[dict]) -> list[Slot]:
         )
         for item in payload
     ]
+
+
+def now_slot(slots: list[Slot], now: datetime) -> Slot | None:
+    """Return the slot that contains `now`, or None if `now` is outside all slots.
+
+    A slot contains `now` iff ``time_start <= now < time_end`` (inclusive lower,
+    exclusive upper). Slots must be timezone-aware; comparison preserves offsets.
+    """
+    for slot in slots:
+        if slot.time_start <= now < slot.time_end:
+            return slot
+    return None

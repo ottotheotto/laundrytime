@@ -49,3 +49,54 @@ def test_parse_slots_parses_tz_aware_datetimes():
 
 def test_parse_slots_empty_input_returns_empty_list():
     assert build.parse_slots([]) == []
+
+
+TZ_PLUS_2 = timezone(timedelta(hours=2))
+
+
+def _slots_at_15min(start: datetime, count: int, prices: list[float]) -> list[build.Slot]:
+    """Helper: build `count` consecutive 15-min slots from `start`, with given prices."""
+    assert len(prices) == count
+    return [
+        build.Slot(
+            time_start=start + timedelta(minutes=15 * i),
+            time_end=start + timedelta(minutes=15 * (i + 1)),
+            sek_per_kwh=prices[i],
+        )
+        for i in range(count)
+    ]
+
+
+def test_now_slot_finds_slot_inside_interval():
+    slots = _slots_at_15min(
+        datetime(2026, 5, 6, 14, 0, tzinfo=TZ_PLUS_2), 2, [0.80, 0.76],
+    )
+    now = datetime(2026, 5, 6, 14, 7, tzinfo=TZ_PLUS_2)
+    assert build.now_slot(slots, now) is slots[0]
+
+
+def test_now_slot_includes_lower_bound():
+    slots = _slots_at_15min(
+        datetime(2026, 5, 6, 14, 0, tzinfo=TZ_PLUS_2), 2, [0.80, 0.76],
+    )
+    now = datetime(2026, 5, 6, 14, 0, tzinfo=TZ_PLUS_2)
+    assert build.now_slot(slots, now) is slots[0]
+
+
+def test_now_slot_excludes_upper_bound():
+    """At exactly time_end, we are in the next slot, not this one."""
+    slots = _slots_at_15min(
+        datetime(2026, 5, 6, 14, 0, tzinfo=TZ_PLUS_2), 2, [0.80, 0.76],
+    )
+    now = datetime(2026, 5, 6, 14, 15, tzinfo=TZ_PLUS_2)
+    assert build.now_slot(slots, now) is slots[1]
+
+
+def test_now_slot_returns_none_when_outside_all_slots():
+    slots = _slots_at_15min(
+        datetime(2026, 5, 6, 14, 0, tzinfo=TZ_PLUS_2), 2, [0.80, 0.76],
+    )
+    before = datetime(2026, 5, 6, 13, 59, tzinfo=TZ_PLUS_2)
+    after = datetime(2026, 5, 6, 14, 30, tzinfo=TZ_PLUS_2)
+    assert build.now_slot(slots, before) is None
+    assert build.now_slot(slots, after) is None
