@@ -292,3 +292,96 @@ def test_fetch_day_raises_immediately_on_4xx_other_than_404():
 
     with pytest.raises(HTTPError):
         build.fetch_day(_date(2026, 5, 6), urlopen=opener, sleep=lambda _: None)
+
+
+def _payload_at(start_iso: str, n: int) -> list[dict]:
+    """Build n consecutive 15-min slots starting at ISO timestamp, all priced 0.5."""
+    base = datetime.fromisoformat(start_iso)
+    out = []
+    for i in range(n):
+        s = base + timedelta(minutes=15 * i)
+        e = base + timedelta(minutes=15 * (i + 1))
+        out.append({
+            "SEK_per_kWh": 0.5,
+            "EUR_per_kWh": 0.044,
+            "EXR": 11.4,
+            "time_start": s.isoformat(),
+            "time_end": e.isoformat(),
+        })
+    return out
+
+
+def test_fetch_dataset_returns_yesterday_today_tomorrow_slots():
+    yesterday_payload = _payload_at("2026-05-05T00:00:00+02:00", 96)
+    today_payload     = _payload_at("2026-05-06T00:00:00+02:00", 96)
+    tomorrow_payload  = _payload_at("2026-05-07T00:00:00+02:00", 96)
+
+    calls: list[_date] = []
+    def fake_fetch(d):
+        calls.append(d)
+        return {
+            _date(2026, 5, 5): yesterday_payload,
+            _date(2026, 5, 6): today_payload,
+            _date(2026, 5, 7): tomorrow_payload,
+        }[d]
+
+    now = datetime(2026, 5, 6, 14, 0, tzinfo=TZ_PLUS_2)
+    slots = build.fetch_dataset(now, fetch=fake_fetch)
+    assert len(slots) == 96 * 3
+    assert calls == [_date(2026, 5, 5), _date(2026, 5, 6), _date(2026, 5, 7)]
+
+
+def test_fetch_dataset_tolerates_missing_yesterday():
+    today_payload = _payload_at("2026-05-06T00:00:00+02:00", 96)
+
+    def fake_fetch(d):
+        if d == _date(2026, 5, 5):
+            return None
+        if d == _date(2026, 5, 6):
+            return today_payload
+        return None  # tomorrow not yet available
+
+    now = datetime(2026, 5, 6, 14, 0, tzinfo=TZ_PLUS_2)
+    slots = build.fetch_dataset(now, fetch=fake_fetch)
+    assert len(slots) == 96
+
+
+def test_fetch_dataset_propagates_failure_on_today():
+    def fake_fetch(d):
+        if d == _date(2026, 5, 6):
+            raise URLError("blew up")
+        return None
+
+    now = datetime(2026, 5, 6, 14, 0, tzinfo=TZ_PLUS_2)
+    with pytest.raises(RuntimeError, match="today"):
+        build.fetch_dataset(now, fetch=fake_fetch)
+
+
+def test_fetch_dataset_swallows_failure_on_tomorrow():
+    today_payload = _payload_at("2026-05-06T00:00:00+02:00", 96)
+
+    def fake_fetch(d):
+        if d == _date(2026, 5, 6):
+            return today_payload
+        if d == _date(2026, 5, 7):
+            raise URLError("not yet")
+        return None  # yesterday missing too
+
+    now = datetime(2026, 5, 6, 14, 0, tzinfo=TZ_PLUS_2)
+    slots = build.fetch_dataset(now, fetch=fake_fetch)
+    assert len(slots) == 96
+
+
+def test_fetch_dataset_uses_stockholm_local_date_for_url():
+    """At UTC midnight, Stockholm is already the next day — URL should reflect that."""
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo("Europe/Stockholm")
+    # 23:30 UTC on 2026-05-06 == 01:30 CEST on 2026-05-07
+    now = datetime(2026, 5, 7, 1, 30, tzinfo=tz)
+    requested = []
+    def fake_fetch(d):
+        requested.append(d)
+        return _payload_at("2026-05-07T00:00:00+02:00", 4) if d == _date(2026, 5, 7) else None
+    build.fetch_dataset(now, fetch=fake_fetch)
+    # today must be 2026-05-07 (Stockholm local), not 2026-05-06 (UTC)
+    assert _date(2026, 5, 7) in requested

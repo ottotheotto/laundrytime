@@ -120,3 +120,37 @@ def fetch_day(
             sleep(5)
     assert last_err is not None
     raise last_err
+
+
+def fetch_dataset(now: datetime, *, fetch=None) -> list[Slot]:
+    """Fetch yesterday, today, and tomorrow's slots and return them as a flat list.
+
+    "Today" is whichever date `now` falls in *in its own timezone* (the caller
+    is expected to pass a Stockholm-local datetime). Today is required — any
+    error fetching it surfaces as ``RuntimeError``. Yesterday and tomorrow are
+    best-effort: missing data (``None``) and exceptions are swallowed.
+    """
+    if fetch is None:
+        fetch = fetch_day
+
+    today = now.date()
+    days = [
+        ("yesterday", today - timedelta(days=1), False),
+        ("today",     today,                     True),
+        ("tomorrow",  today + timedelta(days=1), False),
+    ]
+
+    slots: list[Slot] = []
+    for label, day, required in days:
+        try:
+            payload = fetch(day)
+        except Exception as e:
+            if required:
+                raise RuntimeError(f"Failed to fetch {label} ({day}): {e}") from e
+            payload = None
+        if payload is None:
+            if required:
+                raise RuntimeError(f"Required data for {label} ({day}) unavailable (404)")
+            continue
+        slots.extend(parse_slots(payload))
+    return slots
